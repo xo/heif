@@ -24,9 +24,10 @@ BUILD_DIR=$SRC/build
 DIST_DIR=
 SVT=ON
 DUMP=
+OSX_SDK=
 
 OPTIND=1
-while getopts "b:cC:d:p:s:D:x" opt; do
+while getopts "b:cC:d:p:s:D:A:x" opt; do
 case "$opt" in
   b) BUILDS=$OPTARG ;;
   c) CLEAN=1 ;;
@@ -35,9 +36,18 @@ case "$opt" in
   p) DIST_DIR=$OPTARG ;;
   s) SVT=$(tr '[a-z]' '[A-Z]' <<< "$OPTARG") ;;
   D) DUMP=$(realpath "$OPTARG") ;;
+  A) OSX_SDK=$OPTARG ;;
   x) EXIT=1 ;;
 esac
 done
+
+CROSS_TRIPLE= CMAKE=cmake CC= CXX=
+if [ ! -z "$OSX_SDK" ]; then
+  CROSS_TRIPLE="$(awk '{print $1}' <<< "$OSX_SDK")-apple-$(awk '{print $2}' <<< "$OSX_SDK")"
+  CMAKE="$CROSS_TRIPLE-cmake"
+  CC="$CROSS_TRIPLE-clang"
+  CXX="$CROSS_TRIPLE-clang++"
+fi
 
 mkdir -p $CACHE $BUILD_DIR
 
@@ -45,15 +55,15 @@ if [ -z "$DIST_DIR" ]; then
   DIST_DIR=$(realpath $BUILD_DIR/dist)
 fi
 
-urlver() {
-  basename "$1" \
+repourl() {
+  awk '{print $1}' <<< "${REPOS[$1]}"
+}
+
+repover() {
+  basename "$(repourl "$1")" \
     | sed \
       -e 's/\.tar\.gz$//' \
       -e 's/^v\?//'
-}
-
-repourl() {
-  awk '{print $1}' <<< "${REPOS[$1]}"
 }
 
 repohash() {
@@ -61,7 +71,7 @@ repohash() {
 }
 
 repofile() {
-  echo $CACHE/$1-$(urlver "$(repourl "$1")").tar.gz
+  echo $CACHE/$1-$(repover "$1").tar.gz
 }
 
 relname() {
@@ -72,6 +82,9 @@ grab() {
   echo "RETRIEVING: $1 -> $(relname "$2")"
   curl -4 -L -# -o $2 $1
 }
+
+# store version
+echo "v$(repover libheif)" > $SRC/version.txt
 
 for build in $BUILDS; do
   # cache
@@ -111,7 +124,7 @@ done
 if [ ! -z "$DUMP" ]; then
   echo "DUMPING: $DUMP"
   pushd $BUILD_DIR/libheif &> /dev/null
-  cmake --preset release-noplugins -N|sed 1,2d > $DUMP
+  $CMAKE --preset release-noplugins -N|sed 1,2d > $DUMP
   popd &> /dev/null
   perl -pi -e 's/^\s*//' $DUMP
   perl -pi -e 's/"//g' $DUMP
@@ -143,15 +156,18 @@ build_libde265() {
   fi
   pushd $1 &> /dev/null
   (set -x;
-    ./autogen.sh
-    ./configure \
-      --prefix="$DIST_DIR" \
-      --enable-static \
-      --disable-shared \
-      --disable-dec265 \
-      --disable-sherlock265 \
-      $extra
-    make -j$((`nproc`+2)) install
+    CC=$CC CXX=$CXX \
+      ./autogen.sh
+    CC=$CC CXX=$CXX \
+      ./configure \
+        --prefix="$DIST_DIR" \
+        --enable-static \
+        --disable-shared \
+        --disable-dec265 \
+        --disable-sherlock265 \
+        $extra
+    CC=$CC CXX=$CXX \
+      make -j$((`nproc`+2)) install
   )
   popd &> /dev/null
 }
@@ -160,7 +176,7 @@ build_x265() {
   mkdir -p $1/build
   pushd $1 &> /dev/null
   (set -x;
-    cmake \
+    $CMAKE \
       -G Ninja \
       -DCMAKE_BUILD_TYPE=Release \
       -DCMAKE_INSTALL_PREFIX="$DIST_DIR" \
@@ -176,7 +192,7 @@ build_aom() {
   mkdir -p $1/build
   pushd $1 &> /dev/null
   (set -x;
-    cmake \
+    $CMAKE \
       -G Ninja \
       -DCMAKE_BUILD_TYPE=Release \
       -DCMAKE_INSTALL_PREFIX="$DIST_DIR" \
@@ -195,7 +211,7 @@ build_libwebp() {
   mkdir -p $1/build
   pushd $1 &> /dev/null
   (set -x;
-    cmake \
+    $CMAKE \
       -G Ninja \
       -DCMAKE_BUILD_TYPE=Release \
       -DCMAKE_INSTALL_PREFIX="$DIST_DIR" \
@@ -213,7 +229,7 @@ build_svt() {
   mkdir -p $1/build
   pushd $1 &> /dev/null
   (set -x;
-    cmake \
+    $CMAKE \
       -G Ninja \
       -DCMAKE_BUILD_TYPE=Release \
       -DCMAKE_INSTALL_PREFIX="$DIST_DIR" \
@@ -229,10 +245,12 @@ build_svt() {
 build_zlib() {
   pushd $1 &> /dev/null
   (set -x;
-    ./configure \
-      --prefix="$DIST_DIR" \
-      --static
-    make -j$((`nproc`+2)) install
+    CC=$CC CXX=$CXX \
+      ./configure \
+        --prefix="$DIST_DIR" \
+        --static
+    CC=$CC CXX=$CXX \
+      make -j$((`nproc`+2)) install
   )
   popd &> /dev/null
 }
@@ -240,7 +258,7 @@ build_zlib() {
 build_libheif() {
   # hack for windows preset issue
   local preset="--preset release-noplugins"
-  if [[ "$CROSS_TRIPLE" =~ "w64" ]]; then
+  if [[ "$CROSS_TRIPLE" =~ (w64|apple) ]]; then
     preset=$(build_vars $CACHE/linux_amd64.preset)
   fi
 
@@ -248,7 +266,7 @@ build_libheif() {
   pushd $1 &> /dev/null
   (set -x;
     PKG_CONFIG_PATH=$DIST_DIR/lib/pkgconfig \
-    cmake \
+    $CMAKE \
       $preset \
       -G "Ninja" \
       -DCMAKE_INSTALL_PREFIX="$DIST_DIR" \
@@ -256,9 +274,10 @@ build_libheif() {
       -DBUILD_TESTING=OFF \
       -DWITH_EXAMPLES=OFF \
       -DWITH_GDK_PIXBUF=OFF \
-      -DWITH_SvtEnc="$SVT" \
+      -DWITH_SvtEnc=$SVT \
       -B ./build
-    ninja -C ./build install
+    #ninja -C ./build install
+    cmake --install ./build
   )
   popd &> /dev/null
 }

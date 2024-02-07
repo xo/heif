@@ -1,5 +1,7 @@
 #!/bin/bash
 
+OSX_SDK="darwin20.4"
+
 SRC=$(realpath $(cd -P "$(dirname "${BASH_SOURCE[0]}")" && pwd))
 
 set -e
@@ -11,8 +13,8 @@ UPDATE=0
 mkdir -p $CACHE
 
 declare -A TARGETS=(
-#  [darwin_amd64]=darwin_x86_64
-#  [darwin_arm64]=darwin_aarch64
+  [darwin_amd64]=darwin_x86_64
+  [darwin_arm64]=darwin_aarch64
   [linux_amd64]=linux_x86_64-full
   [linux_arm64]=linux_arm64-full
   [linux_arm]=linux_armv7
@@ -40,7 +42,13 @@ relname() {
 }
 
 osxcross() {
-  echo osxcross
+  local target=$1
+  local build_target="${TARGETS[$target]}"
+  local platform=$(sed -e 's/[-_]/ /' <<< "$build_target"|awk '{print $1}')
+  local arch=$(sed -e 's/[-_]/ /' <<< "$build_target"|awk '{print $2}')
+
+  dockcross linux_amd64 ".cache/linux_amd64.preset"
+  $SRC/build.sh -d $SRC/.cache/$target -A "$arch $OSX_SDK"
 }
 
 dockcross() {
@@ -74,7 +82,7 @@ dockcross() {
       > $CACHE/build-$target.sh
     chmod +x $CACHE/build-$target.sh
     $CACHE/build-$target.sh \
-      bash -c "./build.sh -d .cache/libheif/$target -s $svt $dump"
+      bash -c "./build.sh -d .cache/$target -s $svt $dump"
   )
 }
 
@@ -91,7 +99,7 @@ BUILD_TARGETS=$(sed -e 's/\s\+/\n/g' <<< "$BUILD_TARGETS"|sort -i|tr '\n' ' ')
 echo "TARGETS: $BUILD_TARGETS"
 
 for TARGET in $BUILD_TARGETS; do
-  BUILD_DIR=$CACHE/libheif/$TARGET
+  BUILD_DIR=$CACHE/$TARGET
   BUILD_TARGET="${TARGETS[$TARGET]}"
   PLATFORM=$(sed -e 's/[-_]/ /' <<< "$BUILD_TARGET"|awk '{print $1}')
   ARCH=$(sed -e 's/[-_]/ /' <<< "$BUILD_TARGET"|awk '{print $2}')
