@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 # build libde265, x265-git, aom, libwebp (libsharpyuv), svt-av1, zlib, libheif
 
@@ -61,6 +61,7 @@ fi
 mkdir -p $CACHE $BUILD_DIR
 
 if [ -z "$DIST_DIR" ]; then
+  mkdir -p $BUILD_DIR/dist
   DIST_DIR=$(realpath $BUILD_DIR/dist)
 fi
 
@@ -72,7 +73,7 @@ repover() {
   basename "$(repourl "$1")" \
     | sed \
       -e 's/\.tar\.gz$//' \
-      -e 's/^v\?//'
+      -e 's/^v//'
 }
 
 repohash() {
