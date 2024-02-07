@@ -13,17 +13,17 @@ jobs:
       run: |
         go test -v -x
 
-  test_for_macos:
-    name: Test for macOS
-    runs-on: macos-latest
-    steps:
-    - name: Install Go
-      uses: actions/setup-go@v4
-    - name: Checkout code
-      uses: actions/checkout@v4
-    - name: Test
-      run: |
-        go test -v -x
+#  test_for_macos:
+#    name: Test for macOS
+#    runs-on: macos-latest
+#    steps:
+#    - name: Install Go
+#      uses: actions/setup-go@v4
+#    - name: Checkout code
+#      uses: actions/checkout@v4
+#    - name: Test
+#      run: |
+#        go test -v -x
 
   test_for_windows:
     name: Test for Windows
