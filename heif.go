@@ -9,7 +9,8 @@ package heif
 
 #cgo CFLAGS: -I${SRCDIR} -fPIC -fexceptions
 
-#cgo LDFLAGS: -static -static-libgcc -static-libstdc++ -pie
+#cgo !darwin LDFLAGS: -static -static-libgcc -static-libstdc++ -pie
+
 #cgo LDFLAGS: -lheif -lde265
 #cgo !darwin LDFLAGS: -lx265
 
