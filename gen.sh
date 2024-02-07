@@ -18,8 +18,8 @@ declare -A TARGETS=(
   [linux_amd64]=linux_x86_64-full
   [linux_arm64]=linux_arm64-full
   [linux_arm]=linux_armv7
-#  [windows_amd64]=windows_static-x64
   [windows_amd64]=windows_static-x64-posix
+#  [windows_amd64]=windows_static-x64
 #  [windows_arm64]=windows_arm64
 )
 #[dragonfly_amd64]=
@@ -46,9 +46,15 @@ osxcross() {
   local build_target="${TARGETS[$target]}"
   local platform=$(sed -e 's/[-_]/ /' <<< "$build_target"|awk '{print $1}')
   local arch=$(sed -e 's/[-_]/ /' <<< "$build_target"|awk '{print $2}')
+  local extra=""
+
+  # enable kvazaar for arm64
+  if [[ "$target" =~ arm ]]; then
+    extra="-k ON"
+  fi
 
   dockcross linux_amd64 ".cache/linux_amd64.preset"
-  $SRC/build.sh -d $SRC/.cache/$target -A "$arch $OSX_SDK"
+  $SRC/build.sh -d $SRC/.cache/$target -A "$arch $OSX_SDK" $extra
 }
 
 dockcross() {

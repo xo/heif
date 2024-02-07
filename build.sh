@@ -9,6 +9,7 @@ set -e
 declare -A REPOS=(
   [libde265]="https://github.com/strukturag/libde265/archive/refs/tags/v1.0.15.tar.gz 841c77a583f3ad82d5590b775c48a144"
   [x265]="https://bitbucket.org/multicoreware/x265_git/get/3.5.tar.gz bb92a1fdcb4f4530c3fc12de3452d7fb"
+  [kvazaar]="https://github.com/ultravideo/kvazaar/archive/refs/tags/v2.3.0.tar.gz 1fd2c07adb3da4d7f71b73b3d206f71f"
   [aom]="https://aomedia.googlesource.com/aom/+archive/v3.8.1.tar.gz none"
   [libwebp]="https://github.com/webmproject/libwebp/archive/refs/tags/v1.3.2.tar.gz 827d510b73c73fca3343140556dd2943"
   [svt]="https://gitlab.com/AOMediaCodec/SVT-AV1/-/archive/v1.8.0/v1.8.0.tar.gz 76ce1106bb81821a6d54ecde86d95161"
@@ -22,18 +23,20 @@ EXIT=0
 CACHE=$SRC/.cache
 BUILD_DIR=$SRC/build
 DIST_DIR=
+KVAZAAR=OFF
 SVT=ON
 DUMP=
 OSX_SDK=
 
 OPTIND=1
-while getopts "b:cC:d:p:s:D:A:x" opt; do
+while getopts "b:cC:d:p:k:s:D:A:x" opt; do
 case "$opt" in
   b) BUILDS=$OPTARG ;;
   c) CLEAN=1 ;;
   C) CACHE=$OPTARG ;;
   d) BUILD_DIR=$OPTARG ;;
   p) DIST_DIR=$OPTARG ;;
+  k) KVAZAAR=$(tr '[a-z]' '[A-Z]' <<< "$OPTARG") ;;
   s) SVT=$(tr '[a-z]' '[A-Z]' <<< "$OPTARG") ;;
   D) DUMP=$(realpath "$OPTARG") ;;
   A) OSX_SDK=$OPTARG ;;
@@ -41,12 +44,18 @@ case "$opt" in
 esac
 done
 
+# cross config for darwin
 CROSS_TRIPLE= CMAKE=cmake CC= CXX=
 if [ ! -z "$OSX_SDK" ]; then
   CROSS_TRIPLE="$(awk '{print $1}' <<< "$OSX_SDK")-apple-$(awk '{print $2}' <<< "$OSX_SDK")"
   CMAKE="$CROSS_TRIPLE-cmake"
   CC="$CROSS_TRIPLE-clang"
   CXX="$CROSS_TRIPLE-clang++"
+fi
+
+# swap x265 for kvazaar
+if [[ ! ("$BUILDS" =~ kvazaar) && "$KVAZAAR" == "ON" ]]; then
+  BUILDS=$(sed -e 's/x265/kvazaar/' <<< "$BUILDS")
 fi
 
 mkdir -p $CACHE $BUILD_DIR
@@ -140,7 +149,11 @@ build_vars() {
   while read line; do
     echo -n "-D$line "
   done < "$1"
-  for pkg in LIBDE265 X265 AOM LIBSHARPYUV SvtEnc ZLIB; do
+  local packages="LIBDE265 X265 AOM LIBSHARPYUV SvtEnc ZLIB"
+  if [ "$KVAZAAR" = "ON" ]; then
+    packages=$(sed -e 's/X265/KVAZAAR/' <<< "$packages")
+  fi
+  for pkg in $packages; do
     extra=""
     if [ "$pkg" = "LIBSHARPYUV" ]; then
       extra="/webp"
@@ -187,6 +200,28 @@ build_x265() {
   )
   popd &> /dev/null
 }
+
+build_kvazaar() {
+  local extra=''
+  if [ ! -z "$CROSS_TRIPLE" ]; then
+    extra="--host=$CROSS_TRIPLE"
+  fi
+  pushd $1 &> /dev/null
+  (set -x;
+    CC=$CC CXX=$CXX \
+      ./autogen.sh
+    CC=$CC CXX=$CXX \
+      ./configure \
+        --prefix="$DIST_DIR" \
+        --enable-static \
+        --disable-shared \
+        $extra
+    CC=$CC CXX=$CXX \
+      make -j$((`nproc`+2)) install
+  )
+  popd &> /dev/null
+}
+
 
 build_aom() {
   mkdir -p $1/build
@@ -257,9 +292,12 @@ build_zlib() {
 
 build_libheif() {
   # hack for windows preset issue
-  local preset="--preset release-noplugins"
+  local preset="--preset release-noplugins" extra=""
   if [[ "$CROSS_TRIPLE" =~ (w64|apple) ]]; then
     preset=$(build_vars $CACHE/linux_amd64.preset)
+  fi
+  if [ "$KVAZAAR" = "ON" ]; then
+    extra="-DWITH_X265=OFF -DWITH_KVAZAAR=ON -DCMAKE_CXX_FLAGS=-Wno-error=sometimes-uninitialized"
   fi
 
   mkdir -p $1/build
@@ -275,9 +313,10 @@ build_libheif() {
       -DWITH_EXAMPLES=OFF \
       -DWITH_GDK_PIXBUF=OFF \
       -DWITH_SvtEnc=$SVT \
+      $extra \
       -B ./build
-    #ninja -C ./build install
-    cmake --install ./build
+    #CMAKE --install ./build
+    ninja -C ./build install
   )
   popd &> /dev/null
 }

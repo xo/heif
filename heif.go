@@ -7,10 +7,13 @@ package heif
 
 // link to libde265, x265-git, aom, libwebp (libsharpyuv), svt-av1, zlib, libheif
 
-#cgo CFLAGS: -I${SRCDIR}
+#cgo CFLAGS: -I${SRCDIR} -fPIC -fexceptions
 
 #cgo LDFLAGS: -static -static-libgcc -static-libstdc++ -pie
-#cgo LDFLAGS: -lheif -lde265 -lx265 -laom -lwebp -lwebpdecoder -lwebpdemux -lwebpmux -lsharpyuv -lSvtAv1Enc -lz -lm -lstdc++
+#cgo LDFLAGS: -lheif -lde265
+#cgo !darwin,arm64 LDFLAGS: -lx265
+#cgo darwin,arm64 LDFLAGS: -lkvazaar
+#cgo LDFLAGS: -laom -lwebp -lwebpdecoder -lwebpdemux -lwebpmux -lsharpyuv -lSvtAv1Enc -lz -lm -lstdc++
 
 #cgo darwin,amd64 LDFLAGS: -L${SRCDIR}/libheif/darwin_amd64
 #cgo darwin,arm64 LDFLAGS: -L${SRCDIR}/libheif/darwin_arm64
