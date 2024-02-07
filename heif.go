@@ -4,14 +4,18 @@
 package heif
 
 /*
+
+// link to libde265, x265-git, aom, libwebp (libsharpyuv), svt-av1, zlib, libheif
+
 #cgo CFLAGS: -I${SRCDIR}
-#cgo darwin,amd64 LDFLAGS: -L${SRCDIR}/libheif/darwin_amd64 -lheif
-#cgo darwin,arm64 LDFLAGS: -L${SRCDIR}/libheif/darwin_arm64 -lheif
-#cgo linux,amd64 LDFLAGS: -L${SRCDIR}/libheif/linux_amd64 -lheif
-#cgo linux,arm64 LDFLAGS: -L${SRCDIR}/libheif/linux_arm64 -lheif
-#cgo linux,arm LDFLAGS: -L${SRCDIR}/libheif/linux_arm -lheif
-#cgo solaris,amd64 LDFLAGS: -L${SRCDIR}/libheif/solaris_amd64 -lheif
-#cgo windows,amd64 LDFLAGS: -L${SRCDIR}/libheif/windows_amd64 -lheif
+
+#cgo LDFLAGS: -lheif -lde265 -lx265 -laom -lwebp -lwebpdecoder -lwebpdemux -lwebpmux -lsharpyuv -lSvtAv1Enc -lz -lm -lstdc++
+#cgo darwin,amd64 LDFLAGS: -L${SRCDIR}/libheif/darwin_amd64
+#cgo darwin,arm64 LDFLAGS: -L${SRCDIR}/libheif/darwin_arm64
+#cgo linux,amd64 LDFLAGS: -L${SRCDIR}/libheif/linux_amd64
+#cgo linux,arm64 LDFLAGS: -L${SRCDIR}/libheif/linux_arm64
+#cgo linux,arm LDFLAGS: -L${SRCDIR}/libheif/linux_arm
+#cgo windows,amd64 LDFLAGS: -L${SRCDIR}/libheif/windows_amd64
 
 #include <stdlib.h>
 #include <string.h>
@@ -19,27 +23,17 @@ package heif
 
 #include "libheif/heif.h"
 
-char* version() {
-	char* s = malloc(sizeof(LIBHEIF_VERSION));
-	strncpy(s, LIBHEIF_VERSION, sizeof(LIBHEIF_VERSION));
-	return s;
-}
-
 */
 import "C"
 
 import (
 	"image"
 	"io"
-	"unsafe"
 )
 
 // Version returns the heif version.
 func Version() string {
-	v := C.version()
-	ver := C.GoString(v)
-	C.free(unsafe.Pointer(v))
-	return ver
+	return C.GoString(C.heif_get_version())
 }
 
 // Decode decodes a image from the reader.
