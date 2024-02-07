@@ -1,6 +1,9 @@
 /build
 /.cache
 
+/heif.test
+/heif.test.exe
+
 *.png
 *.heic
 *.rgba

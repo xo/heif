@@ -16,8 +16,8 @@ declare -A TARGETS=(
   [linux_amd64]=linux_x86_64-full
   [linux_arm64]=linux_arm64-full
   [linux_arm]=linux_armv7
-  [windows_amd64]=windows_static-x64
-#  [windows_amd64]=windows_static-x64-posix
+#  [windows_amd64]=windows_static-x64
+  [windows_amd64]=windows_static-x64-posix
 #  [windows_arm64]=windows_arm64
 )
 #[dragonfly_amd64]=
@@ -112,8 +112,8 @@ for TARGET in $BUILD_TARGETS; do
   DEST=$SRC/libheif/$TARGET
   mkdir -p $DEST
   (set -x;
-    cp $DIST_DIR/lib/libheif.a $DEST
-    chmod 0644 $DEST/libheif.a
+    cp $DIST_DIR/lib/*.a $DEST
+    chmod 0644 $DEST/*.a
     cp $DIST_DIR/include/libheif/heif{,_version}.h $SRC/libheif
     perl -pi -e 's/#define LIBHEIF_PLUGIN_DIRECTORY.*/#define LIBHEIF_PLUGIN_DIRECTORY ""/' $SRC/libheif/heif_version.h
   )
