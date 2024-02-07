@@ -281,7 +281,7 @@ build_svt() {
 build_zlib() {
   pushd $1 &> /dev/null
   (set -x;
-    CC=$CC CXX=$CXX \
+    CC=$CC CXX=$CXX CHOST=$CROSS_TRIPLE \
       ./configure \
         --prefix="$DIST_DIR" \
         --static
