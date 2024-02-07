@@ -21,9 +21,12 @@ jobs:
       uses: actions/setup-go@v4
     - name: Checkout code
       uses: actions/checkout@v4
-    - name: Test
+    - name: Test (amd64)
       run: |
-        go test -v -x
+        CGO_ENABLED=1 go test -v -x
+    - name: Test (arm64)
+      run: |
+        CGO_ENABLED=1 GOARCH=arm64 go test -v -x -c
 
 #  test_for_windows:
 #    name: Test for Windows

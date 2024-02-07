@@ -11,8 +11,11 @@ package heif
 
 #cgo LDFLAGS: -static -static-libgcc -static-libstdc++ -pie
 #cgo LDFLAGS: -lheif -lde265
-#cgo !darwin,arm64 LDFLAGS: -lx265
+#cgo !darwin LDFLAGS: -lx265
+
+#cgo darwin,amd64 LDFLAGS: -lx265
 #cgo darwin,arm64 LDFLAGS: -lkvazaar
+
 #cgo LDFLAGS: -laom -lwebp -lwebpdecoder -lwebpdemux -lwebpmux -lsharpyuv -lSvtAv1Enc -lz -lm -lstdc++
 
 #cgo darwin,amd64 LDFLAGS: -L${SRCDIR}/libheif/darwin_amd64
