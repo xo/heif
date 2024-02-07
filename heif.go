@@ -9,7 +9,9 @@ package heif
 
 #cgo CFLAGS: -I${SRCDIR}
 
-#cgo LDFLAGS: -static -lheif -lde265 -lx265 -laom -lwebp -lwebpdecoder -lwebpdemux -lwebpmux -lsharpyuv -lSvtAv1Enc -lz -lm -lstdc++
+#cgo LDFLAGS: -static -static-libgcc -static-libstdc++ -pie
+#cgo LDFLAGS: -lheif -lde265 -lx265 -laom -lwebp -lwebpdecoder -lwebpdemux -lwebpmux -lsharpyuv -lSvtAv1Enc -lz -lm -lstdc++
+
 #cgo darwin,amd64 LDFLAGS: -L${SRCDIR}/libheif/darwin_amd64
 #cgo darwin,arm64 LDFLAGS: -L${SRCDIR}/libheif/darwin_arm64
 #cgo linux,amd64 LDFLAGS: -L${SRCDIR}/libheif/linux_amd64
