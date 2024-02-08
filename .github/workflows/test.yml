@@ -1,41 +1,138 @@
 name: Test
 on: [push, pull_request]
-jobs:
-  test_for_linux:
-    name: Test for Linux
-    runs-on: ubuntu-latest
-    steps:
-    - name: Install Go
-      uses: actions/setup-go@v4
-    - name: Checkout code
-      uses: actions/checkout@v4
-    - name: Test
-      run: |
-        go test -v -x
+env:
+  GO_VERSION: stable
 
-  test_for_macos:
-    name: Test for macOS
+jobs:
+  build_for_linux:
+    name: Build for Linux
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [amd64, arm, arm64]
+    steps:
+    - name: Install build dependencies
+      run: |
+        sudo apt-get -qq update
+        sudo apt-get install -y \
+          build-essential \
+          qemu-user \
+          gcc-arm-linux-gnueabihf \
+          g++-arm-linux-gnueabihf \
+          gcc-aarch64-linux-gnu \
+          g++-aarch64-linux-gnu \
+          libstdc++6-armhf-cross \
+          libstdc++6-arm64-cross \
+          libc6-dev-armhf-cross \
+          libc6-dev-arm64-cross \
+          file
+    - name: Checkout
+      uses: actions/checkout@v4
+    - name: Setup Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: ${{ env.GO_VERSION }}
+    - name: Build ${{ matrix.arch }}
+      run: |
+        ./cross.sh -a ${{ matrix.arch }}
+    - name: Build ${{ matrix.arch }} (static)
+      if: matrix.arch != 'arm'
+      run: |
+        ./cross.sh -a ${{ matrix.arch }} -s
+    - name: Archive artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: dist-linux-${{ matrix.arch }}
+        path: build/linux/**/*
+        if-no-files-found: error
+
+  build_for_macos:
+    name: Build for macOS
+    runs-on: macos-latest
+    strategy:
+      matrix:
+        arch: [amd64, arm64]
+    steps:
+    - name: Install build dependencies
+      run: |
+        brew install coreutils gnu-tar
+    - name: Checkout
+      uses: actions/checkout@v4
+    - name: Setup Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: ${{ env.GO_VERSION }}
+    - name: Build ${{ matrix.arch }}
+      run: |
+        ./cross.sh -a ${{ matrix.arch }}
+    - name: Archive artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: dist-darwin-${{ matrix.arch }}
+        path: build/darwin/**/*
+        if-no-files-found: error
+
+  build_for_macos_universal:
+    name: Build for macOS (universal)
+    needs:
+      - build_for_macos
     runs-on: macos-latest
     steps:
-    - name: Install Go
-      uses: actions/setup-go@v4
-    - name: Checkout code
-      uses: actions/checkout@v4
-    - name: Test (amd64)
+    - name: Install build dependencies
       run: |
-        CGO_ENABLED=1 go test -v -x
-    - name: Test (arm64)
+        brew install coreutils gnu-tar
+    - name: Download artifacts
+      uses: actions/download-artifact@v4
+    - name: Build universal
       run: |
-        CGO_ENABLED=1 GOARCH=arm64 go test -v -x -c
+        export WORKDIR=$PWD/build/darwin/universal/$VER
+        mkdir -p $WORKDIR
 
-#  test_for_windows:
-#    name: Test for Windows
-#    runs-on: windows-latest
-#    steps:
-#    - name: Install Go
-#      uses: actions/setup-go@v4
-#    - name: Checkout code
-#      uses: actions/checkout@v4
-#    - name: Test
-#      run: |
-#        go test -v -x -ldflags '-extldflags "-static"'
+        gtar -jxvf dist-darwin-amd64/*/*/*.tar.bz2 -C $WORKDIR $APP
+        gtar -jxvf dist-darwin-amd64/*/*/*.tar.bz2 -C $WORKDIR LICENSE
+        mv $WORKDIR/$APP $WORKDIR/$APP-amd64
+
+        gtar -jxvf dist-darwin-arm64/*/*/*.tar.bz2 -C $WORKDIR $APP
+        mv $WORKDIR/$APP $WORKDIR/$APP-arm64
+
+        file $WORKDIR/$APP-{amd64,arm64}
+
+        lipo -create -output $WORKDIR/$APP $WORKDIR/$APP-amd64 $WORKDIR/$APP-arm64
+        chmod +x $WORKDIR/$APP
+        file $WORKDIR/$APP
+
+        rm $WORKDIR/$APP-{amd64,arm64}
+
+        sudo /usr/sbin/purge
+
+        gtar -C $WORKDIR -cjf $WORKDIR/$APP-${VER#v}-darwin-universal.tar.bz2 $APP LICENSE
+        ls -alh $WORKDIR/*
+        sha256sum $WORKDIR/*
+    - name: Archive artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: dist-darwin-universal
+        path: build/darwin/**/*
+        if-no-files-found: error
+
+  build_for_windows:
+    name: Build for Windows
+    runs-on: windows-latest
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+    - name: Setup Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: ${{ env.GO_VERSION }}
+    - name: Build amd64
+      shell: bash
+      run: |
+        ./cross.sh
+    - name: Archive artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: dist-windows
+        path: build/windows/**/*
+        if-no-files-found: error
