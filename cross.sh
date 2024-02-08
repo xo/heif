@@ -15,11 +15,11 @@ TAGS=(
 )
 
 OPTIND=1
-while getopts "a:fxt:" opt; do
+while getopts "a:fvt:" opt; do
 case "$opt" in
   a) ARCH=$OPTARG ;;
   f) FORCE=true ;;
-  x) VERBOSE=true ;;
+  v) VERBOSE=true ;;
   t) TAGS=($OPTARG) ;;
 esac
 done
