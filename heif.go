@@ -10,14 +10,13 @@ package heif
 #cgo CFLAGS: -I${SRCDIR} -fPIC -fexceptions
 
 #cgo !darwin LDFLAGS: -static -static-libgcc -static-libstdc++ -pie
-
 #cgo LDFLAGS: -lheif -lde265
 #cgo !darwin LDFLAGS: -lx265
-
 #cgo darwin,amd64 LDFLAGS: -lx265
 #cgo darwin,arm64 LDFLAGS: -lkvazaar
-
-#cgo LDFLAGS: -laom -lwebp -lwebpdecoder -lwebpdemux -lwebpmux -lsharpyuv -lSvtAv1Enc -lz -lm -lstdc++
+#cgo LDFLAGS: -laom -lwebp -lwebpdecoder -lwebpdemux -lwebpmux -lsharpyuv
+#cgo amd64 LDFLAGS: -lSvtAv1Enc
+#cgo LDFLAGS: -lz -lm -lstdc++
 
 #cgo darwin,amd64 LDFLAGS: -L${SRCDIR}/libheif/darwin_amd64
 #cgo darwin,arm64 LDFLAGS: -L${SRCDIR}/libheif/darwin_arm64
@@ -27,10 +26,13 @@ package heif
 #cgo windows,amd64 LDFLAGS: -L${SRCDIR}/libheif/windows_amd64
 
 #include <stdlib.h>
+#include <stdio.h>
 #include <string.h>
 #include <errno.h>
 
 #include "libheif/heif.h"
+
+#define MAX_DECODERS 20
 
 */
 import "C"
@@ -43,6 +45,15 @@ import (
 // Version returns the heif version.
 func Version() string {
 	return C.GoString(C.heif_get_version())
+}
+
+// Decoders returns the heif decoders.
+func Decoders() map[string]string {
+	return nil
+}
+
+func Encoders() map[string]string {
+	return nil
 }
 
 // Decode decodes a image from the reader.
@@ -71,4 +82,7 @@ type Image interface {
 	Next() bool
 	Close() error
 	Err() error
+}
+
+func init() {
 }
