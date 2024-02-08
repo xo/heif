@@ -36,10 +36,6 @@ jobs:
     - name: Build ${{ matrix.arch }}
       run: |
         ./cross.sh -a ${{ matrix.arch }}
-    - name: Build ${{ matrix.arch }} (static)
-      if: matrix.arch != 'arm'
-      run: |
-        ./cross.sh -a ${{ matrix.arch }} -s
     - name: Archive artifacts
       uses: actions/upload-artifact@v4
       with:
