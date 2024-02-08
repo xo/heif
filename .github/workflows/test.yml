@@ -86,8 +86,8 @@ jobs:
         export WORKDIR=$PWD/build/darwin/universal
         mkdir -p $WORKDIR
 
-        cp dist-darwin-amd64/*/*/$APP $WORKDIR/$APP-amd64
-        cp dist-darwin-arm64/*/*/$APP $WORKDIR/$APP-arm64
+        cp dist-darwin-amd64/*/$APP $WORKDIR/$APP-amd64
+        cp dist-darwin-arm64/*/$APP $WORKDIR/$APP-arm64
 
         file $WORKDIR/$APP-{amd64,arm64}
 
