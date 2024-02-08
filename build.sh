@@ -17,52 +17,70 @@ declare -A REPOS=(
   [libheif]="https://github.com/strukturag/libheif/archive/refs/tags/v1.17.6.tar.gz 2c8d3eedfd238a05311533f45ebfac5c"
 )
 
-BUILDS="libde265 x265 aom libwebp svt zlib libheif"
+BUILDS=""
 CLEAN=0
-EXIT=0
 CACHE=$SRC/.cache
 BUILD_DIR=$SRC/build
 DIST_DIR=
+PRESET=
+DUMP=
 KVAZAAR=OFF
 SVT=ON
-DUMP=
-OSX_SDK=
+EXIT=0
 
 OPTIND=1
-while getopts "b:cC:d:p:k:s:D:A:x" opt; do
+while getopts "b:cC:d:p:P:D:k:s:x" opt; do
 case "$opt" in
-  b) BUILDS=$OPTARG ;;
+  b) BUILDS+="$OPTARG " ;;
   c) CLEAN=1 ;;
   C) CACHE=$OPTARG ;;
   d) BUILD_DIR=$OPTARG ;;
   p) DIST_DIR=$OPTARG ;;
+  P) PRESET=$OPTARG ;;
+  D) DUMP=$OPTARG ;;
   k) KVAZAAR=$(tr '[a-z]' '[A-Z]' <<< "$OPTARG") ;;
   s) SVT=$(tr '[a-z]' '[A-Z]' <<< "$OPTARG") ;;
-  D) DUMP=$(realpath "$OPTARG") ;;
-  A) OSX_SDK=$OPTARG ;;
   x) EXIT=1 ;;
 esac
 done
 
+if [ -z "$BUILDS" ]; then
+  BUILDS="libde265 x265 aom libwebp svt zlib libheif"
+fi
+
 # cross config for darwin
-CROSS_TRIPLE= CMAKE=cmake CC= CXX=
-if [ ! -z "$OSX_SDK" ]; then
-  CROSS_TRIPLE="$(awk '{print $1}' <<< "$OSX_SDK")-apple-$(awk '{print $2}' <<< "$OSX_SDK")"
+CMAKE=cmake CC=$CC CXX=$CXX
+if [[ "$CROSS_TRIPLE" =~ apple ]]; then
   CMAKE="$CROSS_TRIPLE-cmake"
   CC="$CROSS_TRIPLE-clang"
   CXX="$CROSS_TRIPLE-clang++"
 fi
 
+echo "KVAZAAR: $KVAZAAR SVT: $SVT"
 # swap x265 for kvazaar
-if [[ ! ("$BUILDS" =~ kvazaar) && "$KVAZAAR" == "ON" ]]; then
+if [[ "$BUILDS" =~ x265 && "$KVAZAAR" == "ON" ]]; then
   BUILDS=$(sed -e 's/x265/kvazaar/' <<< "$BUILDS")
 fi
+# remove svt
+if [[ "$BUILDS" =~ svt && "$SVT" == "OFF" ]]; then
+  BUILDS=$(sed -e 's/svt//' <<< "$BUILDS")
+fi
+echo "BUILDS: $BUILDS"
 
+# working directories
 mkdir -p $CACHE $BUILD_DIR
-
+CACHE=$(realpath "$CACHE")
+BUILD_DIR=$(realpath "$BUILD_DIR")
 if [ -z "$DIST_DIR" ]; then
-  mkdir -p $BUILD_DIR/dist
-  DIST_DIR=$(realpath $BUILD_DIR/dist)
+  DIST_DIR=$BUILD_DIR/dist
+fi
+mkdir -p $DIST_DIR
+DIST_DIR=$(realpath "$DIST_DIR")
+
+# check preset
+if [[ ! -z "$PRESET" && ! -f $CACHE/$PRESET ]]; then
+  echo "error: $CACHE/$PRESET doesn't exist!"
+  exit 1
 fi
 
 repourl() {
@@ -131,14 +149,17 @@ for build in $BUILDS; do
   fi
 done
 
+# dump preset config to cache
 if [ ! -z "$DUMP" ]; then
-  echo "DUMPING: $DUMP"
+  DUMPFILE=$CACHE/$DUMP
+  echo "DUMPING: $DUMPFILE"
   pushd $BUILD_DIR/libheif &> /dev/null
-  $CMAKE --preset release-noplugins -N|sed 1,2d > $DUMP
+  $CMAKE --preset release-noplugins -N|sed 1,2d > $DUMPFILE
   popd &> /dev/null
-  perl -pi -e 's/^\s*//' $DUMP
-  perl -pi -e 's/"//g' $DUMP
-  cat $DUMP
+  perl -pi -e 's/^\s*//' $DUMPFILE
+  perl -pi -e 's/"//g' $DUMPFILE
+  cat $DUMPFILE
+  echo "DUMPED: $DUMPFILE"
   exit
 fi
 
@@ -146,14 +167,35 @@ if [ "$EXIT" = "1" ]; then
   exit
 fi
 
-build_vars() {
+preset_vars() {
+  if [ -z "$PRESET" ]; then
+    echo -n "--preset release-noplugins"
+    return
+  fi
+
   while read line; do
+    if [[ "$KVAZAAR" = "ON" && "$line" =~ [xX]265 ]]; then
+      continue
+    elif [[ "$SVT" = "ON" && "$line" =~ SvtEnc ]]; then
+      continue
+    fi
     echo -n "-D$line "
-  done < "$1"
+  done < $CACHE/$PRESET
+
   local packages="LIBDE265 X265 AOM LIBSHARPYUV SvtEnc ZLIB"
+
+  # turn off x265, swapping for kvazaar
   if [ "$KVAZAAR" = "ON" ]; then
+    echo -n "-DWITH_X265=OFF -DWITH_KVAZAAR=ON -DCMAKE_CXX_FLAGS=-Wno-error=sometimes-uninitialized "
     packages=$(sed -e 's/X265/KVAZAAR/' <<< "$packages")
   fi
+
+  # turn off svt
+  if [ "$SVT" != "ON" ]; then
+    echo -n "-DWITH_SvtEnc=OFF "
+  fi
+
+  # output package config
   for pkg in $packages; do
     extra=""
     if [ "$pkg" = "LIBSHARPYUV" ]; then
@@ -259,9 +301,6 @@ build_libwebp() {
 }
 
 build_svt() {
-  if [ "$SVT" != "ON" ]; then
-    return
-  fi
   mkdir -p $1/build
   pushd $1 &> /dev/null
   (set -x;
@@ -292,17 +331,9 @@ build_zlib() {
 }
 
 build_libheif() {
-  # hack for windows preset issue
-  local preset="--preset release-noplugins" extra=""
-  if [[ "$CROSS_TRIPLE" =~ (w64|apple) ]]; then
-    preset=$(build_vars $CACHE/linux_amd64.preset)
-  fi
-  if [ "$KVAZAAR" = "ON" ]; then
-    extra="-DWITH_X265=OFF -DWITH_KVAZAAR=ON -DCMAKE_CXX_FLAGS=-Wno-error=sometimes-uninitialized"
-  fi
-
   mkdir -p $1/build
   pushd $1 &> /dev/null
+  local preset=$(preset_vars)
   (set -x;
     PKG_CONFIG_PATH=$DIST_DIR/lib/pkgconfig \
     $CMAKE \
@@ -316,7 +347,6 @@ build_libheif() {
       -DWITH_SvtEnc=$SVT \
       $extra \
       -B ./build
-    #CMAKE --install ./build
     ninja -C ./build install
   )
   popd &> /dev/null
@@ -325,5 +355,5 @@ build_libheif() {
 # build
 for build in $BUILDS; do
   echo "BUILDING: $build"
-  eval "build_$build" "$(realpath $BUILD_DIR/$build)"
+  eval "build_$build" "$BUILD_DIR/$build"
 done

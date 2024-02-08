@@ -1,16 +1,8 @@
 #!/bin/bash
 
-OSX_SDK="darwin20.4"
-
 SRC=$(realpath $(cd -P "$(dirname "${BASH_SOURCE[0]}")" && pwd))
 
 set -e
-
-CACHE=$SRC/.cache
-BUILD_TARGETS=""
-UPDATE=0
-
-mkdir -p $CACHE
 
 declare -A TARGETS=(
   [darwin_amd64]=darwin_x86_64
@@ -19,62 +11,94 @@ declare -A TARGETS=(
   [linux_arm64]=linux_arm64-full
   [linux_arm]=linux_armv7
   [windows_amd64]=windows_static-x64-posix
-#  [windows_amd64]=windows_static-x64
 #  [windows_arm64]=windows_arm64
 )
-#[dragonfly_amd64]=
-#[freebsd_amd64]=
-#[netbsd_amd64]=
-#[openbsd_amd64]=
-#[windows_arm64]=
-#[solaris_amd64]=
+
+BUILD_TARGETS=
+CLEAN=0
+CACHE=$SRC/.cache
+BUILDS=
+UPDATE=0
 
 OPTIND=1
-while getopts "t:u" opt; do
+while getopts "t:b:cC:u" opt; do
 case "$opt" in
-  t) BUILD_TARGETS="$OPTARG" ;;
+  t) BUILD_TARGETS=$OPTARG ;;
+  b) BUILDS=$OPTARG ;;
+  c) CLEAN=1 ;;
+  C) CACHE=$OPTARG ;;
   u) UPDATE=1 ;;
 esac
 done
+
+mkdir -p $CACHE
+CACHE=$(realpath "$CACHE")
 
 relname() {
   sed -e "s%^$PWD/%%" <<< "$1"
 }
 
 osxcross() {
-  local target=$1
+  local target=$1 extra=$2
   local build_target="${TARGETS[$target]}"
   local platform=$(sed -e 's/[-_]/ /' <<< "$build_target"|awk '{print $1}')
   local arch=$(sed -e 's/[-_]/ /' <<< "$build_target"|awk '{print $2}')
-  local extra=""
 
-  # enable kvazaar for arm64
-  if [[ "$target" =~ arm ]]; then
-    extra="-k ON"
+  if [ ! -z "$extra" ]; then
+    extra+=" "
   fi
 
-  dockcross linux_amd64 ".cache/linux_amd64.preset"
-  $SRC/build.sh -d $SRC/.cache/$target -A "$arch $OSX_SDK" $extra
+  # add builds
+  for build in $BUILDS; do
+    extra+="-b $build "
+  done
+
+  # enable kvazaar for arm64
+  case $target in
+    darwin_arm64) extra+="-k ON ";;
+  esac
+
+  # determine osxcross config info
+  local osxcross_conf=$(type -p osxcross-conf)
+  if [ -z "$osxcross_conf" ]; then
+    echo "error: could not find osxcross-conf"
+    exit 1
+  fi
+  eval "$($osxcross_conf)"
+  if [ -z "$OSXCROSS_TARGET" ]; then
+    echo "error: OSXCROSS_TARGET is empty!"
+    exit 1
+  fi
+
+  dockcross linux_amd64 "-D $target.preset"
+  CROSS_TRIPLE="$arch-apple-$OSXCROSS_TARGET" \
+    $SRC/build.sh \
+      -d $SRC/.cache/$target \
+      -P $target.preset \
+      $extra
 }
 
 dockcross() {
-  local target=$1
+  local target=$1 extra=$2
   local build_target="${TARGETS[$target]}"
   local platform=$(sed -e 's/[-_]/ /' <<< "$build_target"|awk '{print $1}')
   local arch=$(sed -e 's/[-_]/ /' <<< "$build_target"|awk '{print $2}')
   local image="docker.io/dockcross/$platform-$arch:latest"
 
-  # determine if svt-av1 should be used or not
-  local svt=ON
-  case $target in
-    linux_arm) svt=OFF ;;
-  esac
-
-  # hack for dump param
-  local dump=""
-  if [ ! -z "$2" ]; then
-    dump="-D $2"
+  if [ ! -z "$extra" ]; then
+    extra+=" "
   fi
+
+  # add builds
+  for build in $BUILDS; do
+    extra+="-b $build "
+  done
+
+  # disable svt-av1 for arm
+  case $target in
+    linux_arm)      extra+="-s OFF " ;;
+    windows_arm64)  extra+="-s OFF -k OFF " ;;
+  esac
 
   if [ "$UPDATE" = "1" ]; then
     (set -x;
@@ -87,14 +111,19 @@ dockcross() {
       $image \
       > $CACHE/build-$target.sh
     chmod +x $CACHE/build-$target.sh
-    $CACHE/build-$target.sh \
-      bash -c "./build.sh -d .cache/$target -s $svt $dump"
   )
+  pushd $SRC &> /dev/null
+  (set -x;
+    $CACHE/build-$target.sh \
+      bash -c "./build.sh -d .cache/$target $extra"
+  )
+  popd &> /dev/null
 }
 
 wincross() {
-  dockcross linux_amd64 ".cache/linux_amd64.preset"
-  dockcross "$1"
+  local target=$1 extra=$2
+  dockcross linux_amd64 "-D $target.preset"
+  dockcross "$target" "-P $target.preset $extra"
 }
 
 if [ -z "$BUILD_TARGETS" ]; then
@@ -109,13 +138,20 @@ for TARGET in $BUILD_TARGETS; do
   BUILD_TARGET="${TARGETS[$TARGET]}"
   PLATFORM=$(sed -e 's/[-_]/ /' <<< "$BUILD_TARGET"|awk '{print $1}')
   ARCH=$(sed -e 's/[-_]/ /' <<< "$BUILD_TARGET"|awk '{print $2}')
+  DEST=$SRC/libheif/$TARGET
 
   if [[ -z "$BUILD_TARGET" || -z "$PLATFORM" || -z "$ARCH" ]]; then
     echo "error: invalid target '$TARGET'"
     exit 1
   fi
 
-  echo "TARGET: $TARGET -> $(relname "$BUILD_DIR") ($PLATFORM/$ARCH)"
+  if [ "$CLEAN" = "1" ]; then
+    (set -x;
+      rm -rf $BUILD_DIR $DEST
+    )
+  fi
+
+  echo "GENERATING: $TARGET -> $(relname "$BUILD_DIR") ($PLATFORM/$ARCH)"
   case $TARGET in
     darwin*)  osxcross  "$TARGET" ;;
     windows*) wincross  "$TARGET" ;;
@@ -123,7 +159,6 @@ for TARGET in $BUILD_TARGETS; do
   esac
 
   DIST_DIR=$BUILD_DIR/dist
-  DEST=$SRC/libheif/$TARGET
   mkdir -p $DEST
   (set -x;
     cp $DIST_DIR/lib/*.a $DEST
