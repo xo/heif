@@ -92,6 +92,7 @@ echo "BUILD:"
   CGO_ENABLED=1 \
   GOARCH=$ARCH \
   go test \
+    -a=$FORCE \
     -v=$VERBOSE \
     -x=$VERBOSE \
     -tags="$TAGS" \
