@@ -1,6 +1,7 @@
 name: Test
 on: [push, pull_request]
 env:
+  APP: heif.test
   GO_VERSION: stable
 
 jobs:
@@ -82,15 +83,11 @@ jobs:
       uses: actions/download-artifact@v4
     - name: Build universal
       run: |
-        export WORKDIR=$PWD/build/darwin/universal/$VER
+        export WORKDIR=$PWD/build/darwin/universal
         mkdir -p $WORKDIR
 
-        gtar -jxvf dist-darwin-amd64/*/*/*.tar.bz2 -C $WORKDIR $APP
-        gtar -jxvf dist-darwin-amd64/*/*/*.tar.bz2 -C $WORKDIR LICENSE
-        mv $WORKDIR/$APP $WORKDIR/$APP-amd64
-
-        gtar -jxvf dist-darwin-arm64/*/*/*.tar.bz2 -C $WORKDIR $APP
-        mv $WORKDIR/$APP $WORKDIR/$APP-arm64
+        cp dist-darwin-amd64/*/*/$APP-amd64 $WORKDIR
+        cp dist-darwin-armd64/*/*/$APP-armd64 $WORKDIR
 
         file $WORKDIR/$APP-{amd64,arm64}
 
@@ -98,11 +95,8 @@ jobs:
         chmod +x $WORKDIR/$APP
         file $WORKDIR/$APP
 
-        rm $WORKDIR/$APP-{amd64,arm64}
-
         sudo /usr/sbin/purge
 
-        gtar -C $WORKDIR -cjf $WORKDIR/$APP-${VER#v}-darwin-universal.tar.bz2 $APP LICENSE
         ls -alh $WORKDIR/*
         sha256sum $WORKDIR/*
     - name: Archive artifacts
