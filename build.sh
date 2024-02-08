@@ -184,15 +184,10 @@ preset_vars() {
 
   local packages="LIBDE265 X265 AOM LIBSHARPYUV SvtEnc ZLIB"
 
-  # turn off x265, swapping for kvazaar
+  # turn off x265
   if [ "$KVAZAAR" = "ON" ]; then
-    echo -n "-DWITH_X265=OFF -DWITH_KVAZAAR=ON -DCMAKE_CXX_FLAGS=-Wno-error=sometimes-uninitialized "
+    echo -n "-DWITH_X265=OFF -DCMAKE_CXX_FLAGS=-Wno-error=sometimes-uninitialized "
     packages=$(sed -e 's/X265/KVAZAAR/' <<< "$packages")
-  fi
-
-  # turn off svt
-  if [ "$SVT" != "ON" ]; then
-    echo -n "-DWITH_SvtEnc=OFF "
   fi
 
   # output package config
@@ -235,7 +230,7 @@ build_x265() {
     $CMAKE \
       -G Ninja \
       -DCMAKE_BUILD_TYPE=Release \
-      -DCMAKE_INSTALL_PREFIX="$DIST_DIR" \
+      -DCMAKE_INSTALL_PREFIX=$DIST_DIR \
       -DENABLE_SHARED=OFF \
       -S ./source \
       -B ./build
@@ -273,7 +268,7 @@ build_aom() {
     $CMAKE \
       -G Ninja \
       -DCMAKE_BUILD_TYPE=Release \
-      -DCMAKE_INSTALL_PREFIX="$DIST_DIR" \
+      -DCMAKE_INSTALL_PREFIX=$DIST_DIR \
       -DENABLE_DOCS=0 \
       -DENABLE_EXAMPLES=0 \
       -DENABLE_TESTDATA=0 \
@@ -292,7 +287,7 @@ build_libwebp() {
     $CMAKE \
       -G Ninja \
       -DCMAKE_BUILD_TYPE=Release \
-      -DCMAKE_INSTALL_PREFIX="$DIST_DIR" \
+      -DCMAKE_INSTALL_PREFIX=$DIST_DIR \
       -DBUILD_SHARED_LIBS=OFF \
       -B ./build
     ninja -C ./build install
@@ -307,7 +302,7 @@ build_svt() {
     $CMAKE \
       -G Ninja \
       -DCMAKE_BUILD_TYPE=Release \
-      -DCMAKE_INSTALL_PREFIX="$DIST_DIR" \
+      -DCMAKE_INSTALL_PREFIX=$DIST_DIR \
       -DBUILD_SHARED_LIBS=OFF \
       -DBUILD_DEC=OFF \
       -DBUILD_APPS=OFF \
@@ -334,16 +329,20 @@ build_libheif() {
   mkdir -p $1/build
   pushd $1 &> /dev/null
   local preset=$(preset_vars)
+  local pkgexec=$(type -p "${CROSS_TRIPLE}-pkg-config")
+  local pkgpath=$DIST_DIR/lib/pkgconfig
   (set -x;
-    PKG_CONFIG_PATH=$DIST_DIR/lib/pkgconfig \
+    PKG_CONFIG_PATH=$pkgpath \
     $CMAKE \
       $preset \
       -G "Ninja" \
-      -DCMAKE_INSTALL_PREFIX="$DIST_DIR" \
+      -DCMAKE_INSTALL_PREFIX=$DIST_DIR \
+      -DPKG_CONFIG_EXECUTABLE=$pkgexec \
       -DBUILD_SHARED_LIBS=OFF \
       -DBUILD_TESTING=OFF \
       -DWITH_EXAMPLES=OFF \
       -DWITH_GDK_PIXBUF=OFF \
+      -DWITH_KVAZAAR=$KVAZAAR \
       -DWITH_SvtEnc=$SVT \
       $extra \
       -B ./build
