@@ -16,7 +16,7 @@ package heif
 #cgo darwin,arm64 LDFLAGS: -lkvazaar
 #cgo LDFLAGS: -laom -lwebp -lwebpdecoder -lwebpdemux -lwebpmux -lsharpyuv
 #cgo amd64 LDFLAGS: -lSvtAv1Enc
-#cgo darwin,arm64 -lSvtAv1Enc
+#cgo darwin,arm64 LDFLAGS: -lSvtAv1Enc
 #cgo LDFLAGS: -lz -lm -lstdc++
 
 #cgo darwin,amd64 LDFLAGS: -L${SRCDIR}/libheif/darwin_amd64
