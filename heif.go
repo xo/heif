@@ -17,6 +17,7 @@ package heif
 #cgo LDFLAGS: -laom -lwebp -lwebpdecoder -lwebpdemux -lwebpmux -lsharpyuv
 #cgo !arm LDFLAGS: -lSvtAv1Enc
 #cgo LDFLAGS: -lz -lm -lstdc++
+#cgo windows LDFLAGS: -lwinpthread
 
 #cgo darwin,amd64 LDFLAGS: -L${SRCDIR}/libheif/darwin_amd64
 #cgo darwin,arm64 LDFLAGS: -L${SRCDIR}/libheif/darwin_arm64
